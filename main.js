@@ -3,12 +3,16 @@
    ============================================================ */
 
 import './style.css';
-import { openDB } from './js/db.js';
+import { openDB, seedQuickAdd } from './js/db.js';
+import { predefinedItems } from './js/predefined.js';
 import * as ui from './js/ui.js';
 
 async function init() {
     // Open database
     await openDB();
+
+    // Seed Quick Add store if empty
+    await seedQuickAdd(predefinedItems);
 
     // Load saved theme
     ui.loadTheme();
@@ -25,10 +29,14 @@ async function init() {
     // Init recipe modal close events
     ui.initRecipeModal();
 
-    // Check due reminders
-    ui.checkDueReminders();
-
     // ── Event Listeners ──
+
+    // Quick Add Store (Now FAB)
+    document.getElementById('quick-add-fab').addEventListener('click', ui.renderPredefinedStore);
+    document.getElementById('close-store-btn').addEventListener('click', ui.closePredefinedStore);
+    document.getElementById('predefined-store').addEventListener('click', (e) => {
+        if (e.target.id === 'predefined-store') ui.closePredefinedStore();
+    });
 
     // Tab navigation
     document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -37,8 +45,8 @@ async function init() {
         });
     });
 
-    // Add item FAB
-    document.getElementById('add-item-fab').addEventListener('click', () => {
+    // Add item (Now Header)
+    document.getElementById('add-item-header-btn').addEventListener('click', () => {
         ui.openItemModal();
     });
 
@@ -60,6 +68,13 @@ async function init() {
     document.getElementById('modal-cancel-btn').addEventListener('click', ui.closeItemModal);
     document.getElementById('item-modal').addEventListener('click', (e) => {
         if (e.target.id === 'item-modal') ui.closeItemModal();
+    });
+
+    // Quantity presets
+    document.querySelector('.qty-presets').addEventListener('click', (e) => {
+        if (e.target.classList.contains('qty-preset-btn')) {
+            document.getElementById('item-quantity').value = e.target.dataset.qty;
+        }
     });
 
     // Photo upload

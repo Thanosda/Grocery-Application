@@ -6,6 +6,7 @@ import { categories, getCategoryById } from './categories.js';
 import * as db from './db.js';
 import { recipes } from './recipes.js';
 import * as reminders from './reminders.js';
+import { predefinedItems } from './predefined.js';
 
 // ─── State ───
 let currentTab = 'list';
@@ -13,6 +14,7 @@ let currentCategory = 'all';
 let isGalleryView = false;
 let editingItemId = null;
 let currentPhotoBlob = null;
+let currentRecipeIngredients = [];
 
 // ─── Toast ───
 export function showToast(message, type = 'info') {
@@ -118,6 +120,10 @@ function renderItemCard(item) {
           ${item.quantity ? `<span class="item-card-qty">${escapeHtml(item.quantity)}</span>` : ''}
         </div>
         ${item.notes ? `<div class="item-card-notes">${escapeHtml(item.notes)}</div>` : ''}
+        <div class="item-card-dates">
+          ${item.purchaseDate ? `<span class="item-date">📅 Purchased: ${item.purchaseDate}</span>` : ''}
+          ${item.dueDate ? `<span class="item-date">⏳ Due: ${item.dueDate}</span>` : ''}
+        </div>
       </div>
       <div class="item-card-actions">
         <button class="card-action-btn fav-btn" data-id="${item.id}" title="Favorite">
@@ -143,10 +149,7 @@ function attachCardEvents(container) {
             await db.updateItem(item);
 
             btn.classList.add('pop');
-            if (item.checked && item.reminderDays > 0) {
-                reminders.markReminderPurchased(item.name);
-            }
-
+            
             setTimeout(() => renderItemList(), 300);
             showToast(item.checked ? `${item.name} — bought! ✅` : `${item.name} — back on list`, 'success');
         });
@@ -222,10 +225,11 @@ export function openItemModal(item = null) {
     form.reset();
     document.getElementById('item-id').value = item ? item.id : '';
     document.getElementById('item-name').value = item ? item.name : '';
-    document.getElementById('item-category').value = item ? item.category : 'other';
+    document.getElementById('item-category').value = item ? item.category : 'vegetables';
     document.getElementById('item-quantity').value = item ? (item.quantity || '') : '';
     document.getElementById('item-notes').value = item ? (item.notes || '') : '';
-    document.getElementById('item-reminder').value = item ? (item.reminderDays || 0) : 0;
+    // Dates and reminders removed as per request
+
 
     if (item && item.photo) {
         preview.innerHTML = `<img src="${item.photo}" alt="Preview" />`;
@@ -255,7 +259,6 @@ export async function handleItemFormSubmit(e) {
     const cat = document.getElementById('item-category').value;
     const quantity = document.getElementById('item-quantity').value.trim();
     const notes = document.getElementById('item-notes').value.trim();
-    const reminderDays = parseInt(document.getElementById('item-reminder').value) || 0;
 
     const catObj = getCategoryById(cat);
 
@@ -268,7 +271,7 @@ export async function handleItemFormSubmit(e) {
         photo: currentPhotoBlob || null,
         checked: false,
         favorited: false,
-        reminderDays,
+        reminderDays: 0,
         categoryIcon: catObj.icon,
         createdAt: Date.now(),
     };
@@ -284,11 +287,6 @@ export async function handleItemFormSubmit(e) {
     }
 
     await db.addItem(item);
-
-    // Handle reminder
-    if (reminderDays > 0) {
-        reminders.addReminder(item);
-    }
 
     closeItemModal();
     renderItemList();
@@ -413,20 +411,28 @@ function openRecipeModal(recipeId) {
 
     const modal = document.getElementById('recipe-modal');
     const title = document.getElementById('recipe-modal-title');
-    const body = document.getElementById('recipe-modal-body');
-
     title.textContent = recipe.name;
+
+    currentRecipeIngredients = recipe.ingredients.map(ing => ({ ...ing, id: crypto.randomUUID() }));
+    renderRecipeModalBody(recipe);
+
+    modal.style.display = '';
+}
+
+function renderRecipeModalBody(recipe) {
+    const body = document.getElementById('recipe-modal-body');
     body.innerHTML = `
     <div class="recipe-detail-image">${recipe.emoji}</div>
     <p class="recipe-detail-desc">${recipe.description}</p>
     <div>
-      <div class="recipe-ingredients-title">🧾 Ingredients (${recipe.ingredients.length})</div>
+      <div class="recipe-ingredients-title">🧾 Ingredients (${currentRecipeIngredients.length})</div>
       <ul class="recipe-ingredient-list">
-        ${recipe.ingredients.map(ing => `
-          <li class="recipe-ingredient-item">
+        ${currentRecipeIngredients.map((ing, index) => `
+          <li class="recipe-ingredient-item" data-index="${index}">
             <span class="ing-emoji">${ing.icon}</span>
-            <span style="flex:1">${ing.name}</span>
-            <span style="color:var(--text-muted);font-size:var(--fs-xs)">${ing.quantity}</span>
+            <span class="ing-name" style="flex:1">${ing.name}</span>
+            <input type="text" class="ing-qty-input" value="${ing.quantity}" data-index="${index}" style="width: 80px; font-size: 0.8rem; padding: 4px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-input); color: var(--text-primary);" />
+            <button class="ing-remove-btn" data-index="${index}" style="background:none; border:none; cursor:pointer; font-size: 0.9rem; padding: 4px; margin-left: 8px;">🗑️</button>
           </li>
         `).join('')}
       </ul>
@@ -434,10 +440,24 @@ function openRecipeModal(recipeId) {
     <button class="recipe-add-all-btn" id="recipe-add-all">🛒 Add All to List</button>
   `;
 
-    modal.style.display = '';
+    // Attach events
+    body.querySelectorAll('.ing-qty-input').forEach(input => {
+        input.addEventListener('change', (e) => {
+            const idx = e.target.dataset.index;
+            currentRecipeIngredients[idx].quantity = e.target.value;
+        });
+    });
+
+    body.querySelectorAll('.ing-remove-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const idx = btn.dataset.index;
+            currentRecipeIngredients.splice(idx, 1);
+            renderRecipeModalBody(recipe);
+        });
+    });
 
     document.getElementById('recipe-add-all').addEventListener('click', async () => {
-        for (const ing of recipe.ingredients) {
+        for (const ing of currentRecipeIngredients) {
             const item = {
                 id: crypto.randomUUID(),
                 name: ing.name,
@@ -456,7 +476,7 @@ function openRecipeModal(recipeId) {
         closeRecipeModal();
         switchTab('list');
         renderItemList();
-        showToast(`${recipe.ingredients.length} ingredients added from ${recipe.name} 🍳`, 'success');
+        showToast(`${currentRecipeIngredients.length} ingredients added from ${recipe.name} 🍳`, 'success');
     });
 }
 
@@ -616,6 +636,137 @@ export function checkDueReminders() {
             showToast(`🔔 ${due.length} item${due.length > 1 ? 's' : ''} due for repurchase!`, 'warning');
         }, 1000);
     }
+}
+
+// ─── Predefined Items Store ───
+export async function renderPredefinedStore() {
+    const categoriesContainer = document.getElementById('predefined-categories');
+    const itemsContainer = document.getElementById('predefined-items-grid');
+
+    const cats = [
+        { id: 'all', name: 'All', icon: '🌈' },
+        { id: 'history', name: 'Wanted Items', icon: '🕒' },
+        { id: 'favorites', name: 'Favorites', icon: '⭐' },
+        ...predefinedItems.map(c => ({ id: c.category, name: getCategoryById(c.category).name, icon: getCategoryById(c.category).icon }))
+    ];
+
+    categoriesContainer.innerHTML = cats.map(cat => `
+        <button class="store-cat-pill" data-cat="${cat.id}">
+            <span>${cat.icon}</span>
+            <span>${cat.name}</span>
+        </button>
+    `).join('');
+
+    renderPredefinedItems('all');
+
+    categoriesContainer.querySelectorAll('.store-cat-pill').forEach(btn => {
+        btn.addEventListener('click', () => {
+            renderPredefinedItems(btn.dataset.cat);
+        });
+    });
+
+    document.getElementById('predefined-store').style.display = 'flex';
+}
+
+async function renderPredefinedItems(category) {
+    const container = document.getElementById('predefined-items-grid');
+    let items = [];
+
+    if (category === 'history') {
+        const allItems = await db.getAllItems();
+        // Get unique items by name from history, sorted by most recent
+        const uniqueNames = new Set();
+        items = allItems
+            .sort((a, b) => b.createdAt - a.createdAt)
+            .filter(i => {
+                if (uniqueNames.has(i.name.toLowerCase())) return false;
+                uniqueNames.add(i.name.toLowerCase());
+                return true;
+            })
+            .map(i => ({ name: i.name, icon: i.categoryIcon || '📦', category: i.category, isHistory: true }))
+            .slice(0, 15);
+    } else if (category === 'favorites') {
+        const favs = await db.getAllFavorites();
+        items = favs.map(f => ({ name: f.name, icon: f.categoryIcon || '⭐', category: f.category, isFavorite: true }));
+    } else {
+        const allQuickAdd = await db.getAllQuickAdd();
+        if (category === 'all') {
+            items = allQuickAdd;
+        } else {
+            items = allQuickAdd.filter(i => i.category === category);
+        }
+    }
+
+    container.innerHTML = `
+        <div class="store-add-custom">
+            <input type="text" id="custom-store-item-name" placeholder="Add custom item..." />
+            <select id="custom-store-item-cat">
+                ${categories.filter(c => c.id !== 'all').map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
+            </select>
+            <button id="add-custom-store-item-btn" class="icon-btn">➕</button>
+        </div>
+        ${items.map(item => `
+            <div class="store-item-wrapper">
+                <button class="store-item-card" data-name="${item.name}" data-cat="${item.category}" data-icon="${item.icon}">
+                    <span class="store-item-icon">${item.icon}</span>
+                    <span class="store-item-name">${item.name}</span>
+                </button>
+                ${!item.isHistory && !item.isFavorite ? `<button class="store-item-delete" data-name="${item.name}">✕</button>` : ''}
+            </div>
+        `).join('')}
+    `;
+
+    // Add listeners
+    container.querySelectorAll('.store-item-card').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const name = btn.dataset.name;
+            const cat = btn.dataset.cat;
+            const icon = btn.dataset.icon;
+            addItemToList(name, cat, icon);
+        });
+    });
+
+    container.querySelectorAll('.store-item-delete').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const name = btn.dataset.name;
+            if (confirm(`Remove "${name}" from Quick Add?`)) {
+                await db.deleteQuickAddItem(name);
+                renderPredefinedItems(category);
+            }
+        });
+    });
+
+    document.getElementById('add-custom-store-item-btn').addEventListener('click', async () => {
+        const input = document.getElementById('custom-store-item-name');
+        const catSelect = document.getElementById('custom-store-item-cat');
+        const name = input.value.trim();
+        const catId = catSelect.value;
+        if (!name) return;
+        
+        const catObj = getCategoryById(catId);
+        await db.addQuickAddItem({
+            name,
+            category: catId,
+            icon: catObj.icon
+        });
+        input.value = '';
+        renderPredefinedItems(category === 'history' || category === 'favorites' ? 'all' : category);
+        showToast(`"${name}" added to Quick Add`, 'success');
+    });
+}
+
+async function addItemToList(name, category, icon) {
+    closePredefinedStore();
+    openItemModal({
+        name,
+        category: category || 'other',
+        categoryIcon: icon || '📦'
+    });
+}
+
+export function closePredefinedStore() {
+    document.getElementById('predefined-store').style.display = 'none';
 }
 
 // ─── Utilities ───

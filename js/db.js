@@ -3,7 +3,7 @@
    ============================================================ */
 
 const DB_NAME = 'GrocerSnapDB';
-const DB_VERSION = 1;
+const DB_VERSION = 3;
 
 let dbInstance = null;
 
@@ -21,6 +21,9 @@ export function openDB() {
             }
             if (!db.objectStoreNames.contains('favorites')) {
                 db.createObjectStore('favorites', { keyPath: 'id' });
+            }
+            if (!db.objectStoreNames.contains('quick_add')) {
+                db.createObjectStore('quick_add', { keyPath: 'name' });
             }
         };
 
@@ -105,4 +108,32 @@ export async function getAllFavorites() {
 export async function isFavorite(name) {
     const favs = await getAllFavorites();
     return favs.some(f => f.name.toLowerCase() === name.toLowerCase());
+}
+
+// ─── Quick Add Store CRUD ───
+export async function addQuickAddItem(item) {
+    const store = txStore('quick_add', 'readwrite');
+    return promisifyReq(store.put(item));
+}
+
+export async function deleteQuickAddItem(name) {
+    const store = txStore('quick_add', 'readwrite');
+    return promisifyReq(store.delete(name));
+}
+
+export async function getAllQuickAdd() {
+    const store = txStore('quick_add');
+    return promisifyReq(store.getAll());
+}
+
+export async function seedQuickAdd(items) {
+    const existing = await getAllQuickAdd();
+    if (existing.length > 0) return;
+
+    const store = txStore('quick_add', 'readwrite');
+    for (const cat of items) {
+        for (const item of cat.items) {
+            store.put({ ...item, category: cat.category });
+        }
+    }
 }

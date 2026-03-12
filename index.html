@@ -24,6 +24,9 @@
           <svg class="icon-grid" viewBox="0 0 24 24" width="22" height="22"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
           <svg class="icon-list" viewBox="0 0 24 24" width="22" height="22" style="display:none"><line x1="3" y1="6" x2="21" y2="6" stroke-width="2" stroke-linecap="round"/><line x1="3" y1="12" x2="21" y2="12" stroke-width="2" stroke-linecap="round"/><line x1="3" y1="18" x2="21" y2="18" stroke-width="2" stroke-linecap="round"/></svg>
         </button>
+        <button id="add-item-header-btn" class="icon-btn" title="Add Item">
+          <svg viewBox="0 0 24 24" width="22" height="22"><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+        </button>
         <button id="theme-toggle-btn" class="icon-btn" title="Toggle Theme">
           <svg class="icon-moon" viewBox="0 0 24 24" width="22" height="22"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
           <svg class="icon-sun" viewBox="0 0 24 24" width="22" height="22" style="display:none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
@@ -45,14 +48,20 @@
         <span class="tab-icon">🍳</span>
         <span class="tab-label">Recipes</span>
       </button>
-      <button class="tab-btn" data-tab="reminders">
-        <span class="tab-icon">🔔</span>
-        <span class="tab-label">Reminders</span>
-      </button>
     </nav>
 
     <!-- Category Filter Bar -->
     <div id="category-filter" class="category-filter"></div>
+
+    <!-- Predefined Items Store -->
+    <div id="predefined-store" class="predefined-store" style="display:none">
+      <div class="store-header">
+        <span>🛒 Quick Add</span>
+        <button id="close-store-btn" class="icon-btn">✕</button>
+      </div>
+      <div id="predefined-categories" class="store-categories"></div>
+      <div id="predefined-items-grid" class="store-items-grid"></div>
+    </div>
 
     <!-- Stats Bar -->
     <div id="stats-bar" class="stats-bar">
@@ -97,20 +106,12 @@
         <div id="recipes-grid" class="recipes-grid"></div>
       </section>
 
-      <!-- Reminders Tab -->
-      <section id="tab-reminders" class="tab-panel" style="display:none">
-        <div id="reminders-list" class="reminders-list"></div>
-        <div id="reminders-empty" class="empty-state" style="display:none">
-          <div class="empty-icon">🔔</div>
-          <h3>No reminders set</h3>
-          <p>Set recurring reminders on items to never forget them</p>
-        </div>
       </section>
     </main>
 
     <!-- Floating Add Button -->
-    <button id="add-item-fab" class="fab" title="Add Item">
-      <svg viewBox="0 0 24 24" width="28" height="28"><line x1="12" y1="5" x2="12" y2="19" stroke-width="2.5" stroke-linecap="round"/><line x1="5" y1="12" x2="19" y2="12" stroke-width="2.5" stroke-linecap="round"/></svg>
+    <button id="quick-add-fab" class="fab" title="Quick Add">
+      <span style="font-size: 1.8rem;">🛍️</span>
     </button>
 
     <!-- Add/Edit Item Modal -->
@@ -125,7 +126,7 @@
           
           <!-- Photo Upload -->
           <div class="photo-upload" id="photo-upload-area">
-            <input type="file" id="item-photo-input" accept="image/*" capture="environment" hidden />
+            <input type="file" id="item-photo-input" accept="image/*" hidden />
             <div id="photo-preview" class="photo-preview">
               <div class="photo-placeholder">
                 <span class="photo-icon">📷</span>
@@ -149,20 +150,17 @@
             <div class="form-group flex-1">
               <label for="item-quantity">Quantity</label>
               <input type="text" id="item-quantity" placeholder="e.g., 2 kg" />
+              <div class="qty-presets">
+                <button type="button" class="qty-preset-btn" data-qty="1 kg">1 kg</button>
+                <button type="button" class="qty-preset-btn" data-qty="0.5 kg">1/2 kg</button>
+                <button type="button" class="qty-preset-btn" data-qty="0.25 kg">1/4 kg</button>
+              </div>
             </div>
           </div>
 
           <div class="form-group">
             <label for="item-notes">Notes</label>
             <textarea id="item-notes" rows="2" placeholder="Brand preference, alternatives..."></textarea>
-          </div>
-
-          <div class="form-group">
-            <label for="item-reminder">Reminder (days)</label>
-            <div class="reminder-input-row">
-              <input type="number" id="item-reminder" min="0" max="365" placeholder="0 = no reminder" />
-              <span class="reminder-hint">Remind me to rebuy every X days</span>
-            </div>
           </div>
 
           <div class="form-actions">

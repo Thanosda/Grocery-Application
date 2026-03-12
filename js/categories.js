@@ -6,7 +6,6 @@ export const categories = [
   { id: 'all',       name: 'All',            icon: '🏷️', color: 'var(--accent)' },
   { id: 'fruits',    name: 'Fruits',          icon: '🍎', color: 'var(--cat-fruits)' },
   { id: 'vegetables',name: 'Vegetables',      icon: '🥦', color: 'var(--cat-vegetables)' },
-  { id: 'dairy',     name: 'Dairy',           icon: '🥛', color: 'var(--cat-dairy)' },
   { id: 'bakery',    name: 'Bakery',          icon: '🍞', color: 'var(--cat-bakery)' },
   { id: 'meat',      name: 'Meat & Seafood',  icon: '🥩', color: 'var(--cat-meat)' },
   { id: 'beverages', name: 'Beverages',       icon: '🧃', color: 'var(--cat-beverages)' },
