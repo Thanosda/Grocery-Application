@@ -15,6 +15,8 @@ let isGalleryView = false;
 let editingItemId = null;
 let currentPhotoBlob = null;
 let currentRecipeIngredients = [];
+let isEditingRecipe = false;
+let editingRecipeId = null;
 
 // ─── Toast ───
 export function showToast(message, type = 'info') {
@@ -384,36 +386,89 @@ export async function renderFavorites() {
 }
 
 // ─── Recipes Tab ───
-export function renderRecipes() {
+export async function renderRecipes() {
+    const recipesFromDb = await db.getAllRecipes();
     const container = document.getElementById('recipes-grid');
-    container.innerHTML = recipes.map(r => `
-    <div class="recipe-card" data-recipe="${r.id}">
-      <div class="recipe-card-image">${r.emoji}</div>
-      <div class="recipe-card-body">
-        <div class="recipe-card-title">${r.name}</div>
-        <div class="recipe-card-desc">${r.description}</div>
-        <div class="recipe-card-count">${r.ingredients.length} ingredients</div>
-      </div>
-    </div>
-  `).join('');
+    container.innerHTML = `
+        <div class="recipe-card add-card" id="add-recipe-card">
+            <div class="recipe-card-image">➕</div>
+            <div class="recipe-card-body">
+                <div class="recipe-card-title">Add Recipe</div>
+                <div class="recipe-card-desc">Create your own recipe</div>
+            </div>
+        </div>
+        ${recipesFromDb.map(r => `
+            <div class="recipe-card" data-recipe="${r.id}">
+                <div class="recipe-card-image">${r.emoji}</div>
+                <div class="recipe-card-body">
+                    <div class="recipe-card-title">${escapeHtml(r.name)}</div>
+                    <div class="recipe-card-desc">${escapeHtml(r.description)}</div>
+                    <div class="recipe-card-count">${r.ingredients.length} ingredients</div>
+                </div>
+                <div class="recipe-card-actions">
+                    <button class="recipe-edit-btn" data-id="${r.id}" title="Edit Recipe">✏️</button>
+                    <button class="recipe-delete-btn" data-id="${r.id}" title="Delete Recipe">🗑️</button>
+                </div>
+            </div>
+        `).join('')}
+    `;
 
-    container.querySelectorAll('.recipe-card').forEach(card => {
-        card.addEventListener('click', () => {
+    container.querySelectorAll('.recipe-card:not(.add-card)').forEach(card => {
+        card.addEventListener('click', (e) => {
+            if (e.target.closest('.recipe-card-actions')) return;
             const id = card.dataset.recipe;
             openRecipeModal(id);
         });
     });
+
+    document.getElementById('add-recipe-card').addEventListener('click', () => {
+        openRecipeModal(null, true);
+    });
+
+    container.querySelectorAll('.recipe-edit-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openRecipeModal(btn.dataset.id, true);
+        });
+    });
+
+    container.querySelectorAll('.recipe-delete-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const id = btn.dataset.id;
+            if (confirm('Delete this recipe?')) {
+                await db.deleteRecipe(id);
+                renderRecipes();
+                showToast('Recipe deleted', 'error');
+            }
+        });
+    });
 }
 
-function openRecipeModal(recipeId) {
-    const recipe = recipes.find(r => r.id === recipeId);
+export async function openRecipeModal(recipeId, editMode = false) {
+    isEditingRecipe = editMode;
+    editingRecipeId = recipeId;
+
+    let recipe;
+    if (recipeId) {
+        recipe = await db.getRecipe(recipeId);
+    } else {
+        recipe = {
+            id: crypto.randomUUID(),
+            name: '',
+            emoji: '🍳',
+            description: '',
+            ingredients: []
+        };
+    }
+
     if (!recipe) return;
 
     const modal = document.getElementById('recipe-modal');
     const title = document.getElementById('recipe-modal-title');
-    title.textContent = recipe.name;
+    title.textContent = isEditingRecipe ? (recipeId ? 'Edit Recipe' : 'Add Recipe') : recipe.name;
 
-    currentRecipeIngredients = recipe.ingredients.map(ing => ({ ...ing, id: crypto.randomUUID() }));
+    currentRecipeIngredients = [...recipe.ingredients];
     renderRecipeModalBody(recipe);
 
     modal.style.display = '';
@@ -421,62 +476,159 @@ function openRecipeModal(recipeId) {
 
 function renderRecipeModalBody(recipe) {
     const body = document.getElementById('recipe-modal-body');
-    body.innerHTML = `
-    <div class="recipe-detail-image">${recipe.emoji}</div>
-    <p class="recipe-detail-desc">${recipe.description}</p>
-    <div>
-      <div class="recipe-ingredients-title">🧾 Ingredients (${currentRecipeIngredients.length})</div>
-      <ul class="recipe-ingredient-list">
-        ${currentRecipeIngredients.map((ing, index) => `
-          <li class="recipe-ingredient-item" data-index="${index}">
-            <span class="ing-emoji">${ing.icon}</span>
-            <span class="ing-name" style="flex:1">${ing.name}</span>
-            <input type="text" class="ing-qty-input" value="${ing.quantity}" data-index="${index}" style="width: 80px; font-size: 0.8rem; padding: 4px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-input); color: var(--text-primary);" />
-            <button class="ing-remove-btn" data-index="${index}" style="background:none; border:none; cursor:pointer; font-size: 0.9rem; padding: 4px; margin-left: 8px;">🗑️</button>
-          </li>
-        `).join('')}
-      </ul>
-    </div>
-    <button class="recipe-add-all-btn" id="recipe-add-all">🛒 Add All to List</button>
-  `;
+    
+    if (isEditingRecipe) {
+        body.innerHTML = `
+            <div class="recipe-edit-form">
+                <div class="recipe-modal-header-redesign">
+                    <div class="recipe-header-emoji-frame">
+                        <span id="display-recipe-emoji">${recipe.emoji}</span>
+                        <input type="text" id="recipe-emoji" value="${recipe.emoji}" title="Change Emoji" />
+                    </div>
+                    <div class="recipe-header-info">
+                        <input type="text" id="recipe-name" value="${escapeHtml(recipe.name)}" placeholder="Recipe Name..." autocomplete="off" />
+                        <textarea id="recipe-desc" placeholder="Add a description for your recipe...">${escapeHtml(recipe.description)}</textarea>
+                    </div>
+                </div>
+                
+                <div class="recipe-ingredients-section">
+                    <div class="recipe-ingredients-title">
+                        <span>Ingredients</span>
+                        <span class="recipe-card-count" style="background: var(--accent-light); padding: 2px 10px; border-radius: 10px;">${currentRecipeIngredients.length}</span>
+                    </div>
+                    <div class="recipe-ingredient-list" id="recipe-ingredients-list-container">
+                        ${currentRecipeIngredients.map((ing, index) => `
+                            <div class="recipe-ingredient-item" style="animation-delay: ${index * 0.05}s">
+                                <div class="ing-icon-wrapper">
+                                    <input type="text" class="ing-icon-input" value="${ing.icon}" data-index="${index}" title="Change Icon" />
+                                </div>
+                                <input type="text" class="ing-name-input" value="${escapeHtml(ing.name)}" data-index="${index}" placeholder="Ingredient Name" />
+                                <input type="text" class="ing-qty-badge-input" value="${escapeHtml(ing.quantity)}" data-index="${index}" placeholder="Qty" />
+                                <button class="ing-remove-btn" data-index="${index}" title="Remove">✕</button>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <button id="add-ingredient-btn">➕ Add Ingredient</button>
+                </div>
 
-    // Attach events
-    body.querySelectorAll('.ing-qty-input').forEach(input => {
-        input.addEventListener('change', (e) => {
-            const idx = e.target.dataset.index;
-            currentRecipeIngredients[idx].quantity = e.target.value;
+                <div class="form-actions">
+                    <button class="recipe-add-all-btn" id="save-recipe-btn" style="margin-top:0">
+                        ${editingRecipeId ? 'Save Changes' : 'Create Recipe'}
+                    </button>
+                </div>
+            </div>
+        `;
+    } else {
+        body.innerHTML = `
+            <div class="view-recipe-body">
+                <div class="recipe-header-emoji-frame" style="margin: 0 auto 20px;">
+                    <span>${recipe.emoji}</span>
+                </div>
+                <p class="view-recipe-desc">${recipe.description || 'No description provided.'}</p>
+                
+                <div class="recipe-ingredients-section">
+                    <div class="recipe-ingredients-title">
+                        <span>Ingredients</span>
+                        <span class="recipe-card-count" style="background: var(--accent-light); padding: 2px 10px; border-radius: 10px;">${currentRecipeIngredients.length}</span>
+                    </div>
+                    <div class="recipe-ingredient-list">
+                        ${currentRecipeIngredients.map((ing, index) => `
+                            <div class="recipe-ingredient-item" style="animation-delay: ${index * 0.05}s">
+                                <div class="ing-icon-wrapper">${ing.icon}</div>
+                                <span class="view-ing-name" style="flex:1; text-align: left;">${escapeHtml(ing.name)}</span>
+                                <span class="recipe-card-count" style="font-size: 0.8rem">${escapeHtml(ing.quantity)}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                <button class="recipe-add-all-btn" id="recipe-add-all">🛒 Add All to List</button>
+            </div>
+        `;
+    }
+
+    // Event Handlers
+    if (isEditingRecipe) {
+        document.getElementById('recipe-emoji').addEventListener('input', (e) => {
+            document.getElementById('display-recipe-emoji').textContent = e.target.value.trim() || '🍳';
         });
-    });
+
+        body.querySelectorAll('.ing-icon-input').forEach(input => {
+            input.addEventListener('change', (e) => {
+                const idx = e.target.dataset.index;
+                currentRecipeIngredients[idx].icon = e.target.value.trim() || '❓';
+            });
+        });
+
+        body.querySelectorAll('.ing-name-input').forEach(input => {
+            input.addEventListener('change', (e) => {
+                const idx = e.target.dataset.index;
+                currentRecipeIngredients[idx].name = e.target.value;
+            });
+        });
+
+        body.querySelectorAll('.ing-qty-badge-input').forEach(input => {
+            input.addEventListener('change', (e) => {
+                const idx = e.target.dataset.index;
+                currentRecipeIngredients[idx].quantity = e.target.value;
+            });
+        });
+
+        document.getElementById('add-ingredient-btn').addEventListener('click', () => {
+            currentRecipeIngredients.push({ name: '', quantity: '', category: 'other', icon: '❓' });
+            renderRecipeModalBody(recipe);
+        });
+
+        document.getElementById('save-recipe-btn').addEventListener('click', async () => {
+            const name = document.getElementById('recipe-name').value.trim();
+            if (!name) {
+                showToast('Please enter a recipe name', 'warning');
+                return;
+            }
+
+            const updatedRecipe = {
+                id: editingRecipeId || crypto.randomUUID(),
+                name: name,
+                emoji: document.getElementById('recipe-emoji').value.trim() || '🍳',
+                description: document.getElementById('recipe-desc').value.trim(),
+                ingredients: currentRecipeIngredients.filter(ing => ing.name.trim() !== '')
+            };
+
+            await db.updateRecipe(updatedRecipe);
+            closeRecipeModal();
+            renderRecipes();
+            showToast(editingRecipeId ? 'Recipe updated! ✨' : 'New recipe added! ✨', 'success');
+        });
+    } else {
+        document.getElementById('recipe-add-all').addEventListener('click', async () => {
+            for (const ing of currentRecipeIngredients) {
+                const item = {
+                    id: crypto.randomUUID(),
+                    name: ing.name,
+                    category: ing.category,
+                    quantity: ing.quantity,
+                    notes: `From: ${recipe.name}`,
+                    photo: null,
+                    checked: false,
+                    favorited: false,
+                    reminderDays: 0,
+                    categoryIcon: ing.icon,
+                    createdAt: Date.now(),
+                };
+                await db.addItem(item);
+            }
+            closeRecipeModal();
+            switchTab('list');
+            renderItemList();
+            showToast(`${currentRecipeIngredients.length} items added to your list! 🛒`, 'success');
+        });
+    }
 
     body.querySelectorAll('.ing-remove-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
+        btn.addEventListener('click', () => {
             const idx = btn.dataset.index;
             currentRecipeIngredients.splice(idx, 1);
             renderRecipeModalBody(recipe);
         });
-    });
-
-    document.getElementById('recipe-add-all').addEventListener('click', async () => {
-        for (const ing of currentRecipeIngredients) {
-            const item = {
-                id: crypto.randomUUID(),
-                name: ing.name,
-                category: ing.category,
-                quantity: ing.quantity,
-                notes: `From: ${recipe.name}`,
-                photo: null,
-                checked: false,
-                favorited: false,
-                reminderDays: 0,
-                categoryIcon: ing.icon,
-                createdAt: Date.now(),
-            };
-            await db.addItem(item);
-        }
-        closeRecipeModal();
-        switchTab('list');
-        renderItemList();
-        showToast(`${currentRecipeIngredients.length} ingredients added from ${recipe.name} 🍳`, 'success');
     });
 }
 

@@ -3,16 +3,20 @@
    ============================================================ */
 
 import './style.css';
-import { openDB, seedQuickAdd } from './js/db.js';
+import * as db from './js/db.js';
 import { predefinedItems } from './js/predefined.js';
 import * as ui from './js/ui.js';
 
 async function init() {
     // Open database
-    await openDB();
+    await db.openDB();
 
     // Seed Quick Add store if empty
-    await seedQuickAdd(predefinedItems);
+    await db.seedQuickAdd(predefinedItems);
+
+    // Seed recipes if empty
+    const { recipes } = await import('./js/recipes.js');
+    await db.seedRecipes(recipes);
 
     // Load saved theme
     ui.loadTheme();

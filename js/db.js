@@ -3,7 +3,7 @@
    ============================================================ */
 
 const DB_NAME = 'GrocerSnapDB';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 let dbInstance = null;
 
@@ -24,6 +24,9 @@ export function openDB() {
             }
             if (!db.objectStoreNames.contains('quick_add')) {
                 db.createObjectStore('quick_add', { keyPath: 'name' });
+            }
+            if (!db.objectStoreNames.contains('recipes')) {
+                db.createObjectStore('recipes', { keyPath: 'id' });
             }
         };
 
@@ -135,5 +138,41 @@ export async function seedQuickAdd(items) {
         for (const item of cat.items) {
             store.put({ ...item, category: cat.category });
         }
+    }
+}
+
+// ─── Recipes CRUD ───
+export async function addRecipe(recipe) {
+    const store = txStore('recipes', 'readwrite');
+    return promisifyReq(store.put(recipe));
+}
+
+export async function updateRecipe(recipe) {
+    const store = txStore('recipes', 'readwrite');
+    return promisifyReq(store.put(recipe));
+}
+
+export async function deleteRecipe(id) {
+    const store = txStore('recipes', 'readwrite');
+    return promisifyReq(store.delete(id));
+}
+
+export async function getRecipe(id) {
+    const store = txStore('recipes');
+    return promisifyReq(store.get(id));
+}
+
+export async function getAllRecipes() {
+    const store = txStore('recipes');
+    return promisifyReq(store.getAll());
+}
+
+export async function seedRecipes(recipes) {
+    const existing = await getAllRecipes();
+    if (existing.length > 0) return;
+
+    const store = txStore('recipes', 'readwrite');
+    for (const recipe of recipes) {
+        store.put(recipe);
     }
 }
